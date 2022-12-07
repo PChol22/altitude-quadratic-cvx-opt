@@ -33,7 +33,6 @@ def parse_input(table):
   sector_subtotals: List[int] = table["subtotals"]["bySector"]
   total: int = table["total"]
 
-  print(table_details, country_subtotals, sector_subtotals, total)
 
   variables_mapping = get_variables_mapping(table_details, country_subtotals, sector_subtotals)
   variables_count = len(variables_mapping)
@@ -133,82 +132,9 @@ def get_solution(coeffs: List[List[int]], subtotals: List[int]) -> List[float]:
 def validate_input(user_input):
   pass
 
-"""
+
 def adjust_output(solution: List[float], user_input):
   integer_solution = list(map(lambda f: int(f), solution))
-  variables_mapping = get_variables_mapping(
-    user_input["details"],
-    user_input["subtotals"]["byCountry"],
-    user_input["subtotals"]["bySector"])
-
-  
-  return integer_solution
-
-
-def rec(solution, variables, variable_index, user_input):
-  if variable_index == -1:
-    return True
-
-  variable = variables[variable_index]
-
-  if variable["i"] == None:
-    s = 0
-    for j in range(len(user_input["subtotals"]["bySector"])):
-      if user_input["subtotals"]["bySector"] == None:
-        s += solution[get_variable_index(None, j, variables)]
-        continue
-      s += user_input["subtotals"]["bySector"][j]
-
-    possibilities = [0] if s == user_input["total"] else [0,1]
-    
-    for p in possibilities:
-      solution[get_variable_index(None, variable["j"], variables)] += p
-
-      if rec(solution, variables, variable_index - 1, user_input):
-        return True
-
-      solution[get_variable_index(None, variable["j"], variables)] -= p
-    
-    return False
-
-
-  if variable["j"] == None:
-    s = 0
-    for i in range(len(user_input["subtotals"]["byCountry"])):
-      if user_input["subtotals"]["byCountry"] == None:
-        s += solution[get_variable_index(i, None, variables)]
-        continue
-      s += user_input["subtotals"]["byCountry"][i]
-    
-    possibilities = [0] if s == user_input["total"] else [0,1]
-
-    for p in possibilities:
-      solution[get_variable_index(variable["i"], None, variables)] += p
-
-      if rec(solution, variables, variable_index - 1, user_input):
-        return True
-
-      solution[get_variable_index(variable["i"], None, variables)] -= p
-    
-    return False
-
-
-  s = 0
-  for i in range(len(user_input["details"])):
-    if user_input["subtotals"]["byCountry"] == None:
-      s += solution[get_variable_index(i, None, variables)]
-      continue
-    s += user_input["subtotals"]["byCountry"][i]
-"""
-
-def lambda_handler(event, _):
-  user_input = loads(event["body"])
-  validate_input(user_input)
-
-  parsed_input = parse_input(user_input)
-  reduced_input = get_reduced_matrix(*parsed_input)
-  solution = get_solution(*reduced_input)
-
   variables_mapping = get_variables_mapping(
     user_input["details"],
     user_input["subtotals"]["byCountry"],
@@ -219,15 +145,133 @@ def lambda_handler(event, _):
     j = v["j"]
 
     if i == None:
-      user_input["subtotals"]["bySector"][j] = solution[index]
+      user_input["subtotals"]["bySector"][j] = integer_solution[index]
       continue
 
     if j == None:
-      user_input["subtotals"]["byCountry"][i] = solution[index]
+      user_input["subtotals"]["byCountry"][i] = integer_solution[index]
       continue
     
-    user_input["details"][i][j] = solution[index]
+    user_input["details"][i][j] = integer_solution[index]
 
+  print("Before adjustment", user_input)
+
+  if rec(variables_mapping, len(variables_mapping) - 1, user_input) == True:
+    return user_input
+  
+  raise 'Failed to adjust'
+
+
+def rec(variables, variable_index, user_input):
+  if variable_index == -1:
+    return True
+
+  variable = variables[variable_index]
+
+  if variable["i"] == None:
+    is_free_on_y = any(map(lambda v: v["j"] == variable["j"] and v["i"] != None, variables))
+    is_free_on_x = any(map(lambda v: v["j"] != variable["j"] and v["i"] == None, variables))
+
+    y_possibilities = [0, 1] if is_free_on_y else [user_input["subtotals"]["bySector"][variable["j"]] - sum(map(lambda v: v[variable["j"]], user_input["details"]))]
+    x_possibilities = [0, 1] if is_free_on_x else [user_input["total"] - sum(user_input["subtotals"]["bySector"])]
+
+    if y_possibilities[0] > 1 or x_possibilities[0] > 1:
+      return False
+
+    possibilities = [
+      *([0] if 0 in x_possibilities and 0 in y_possibilities else []), 
+      *([1] if 1 in x_possibilities and 1 in y_possibilities else [])
+    ]
+
+    if len(possibilities) == 0:
+      return False
+    
+    for p in possibilities:
+      user_input["subtotals"]["bySector"][variable["j"]] += p
+
+      if rec(variables, variable_index - 1, user_input):
+        print("OK sector", p)
+        return True
+
+      print("KO sector", p)
+      user_input["subtotals"]["bySector"][variable["j"]] -= p
+    
+    return False
+
+
+  if variable["j"] == None:
+    is_free_on_y = any(map(lambda v: v["i"] != variable["i"] and v["j"] == None, variables))
+    is_free_on_x = any(map(lambda v: v["i"] == variable["i"] and v["j"] != None, variables))
+
+    x_possibilities = [0, 1] if is_free_on_x else [user_input["subtotals"]["byCountry"][variable["i"]] - sum(user_input["details"][variable["i"]])]
+    y_possibilities = [0, 1] if is_free_on_y else [user_input["total"] - sum(user_input["subtotals"]["byCountry"])]
+
+    if y_possibilities[0] > 1 or x_possibilities[0] > 1:
+      return False
+
+    possibilities = [
+      *([0] if 0 in x_possibilities and 0 in y_possibilities else []), 
+      *([1] if 1 in x_possibilities and 1 in y_possibilities else [])
+    ]
+
+    if len(possibilities) == 0:
+      return False
+    
+    for p in possibilities:
+      user_input["subtotals"]["byCountry"][variable["i"]] += p
+
+      if rec(variables, variable_index - 1, user_input):
+        print("OK country", p)
+        return True
+
+      print("KO country", p)
+      user_input["subtotals"]["byCountry"][variable["i"]] -= p
+    
+    return False
+
+
+  else:
+    is_free_on_y = any(map(lambda v: v["i"] != variable["i"] and v["j"] == variable["j"], variables))
+    is_free_on_x = any(map(lambda v: v["i"] == variable["i"] and v["j"] != variable["j"], variables))
+
+    x_possibilities = [0, 1] if is_free_on_x else [user_input["subtotals"]["byCountry"][variable["i"]] - sum(user_input["details"][variable["i"]])]
+    y_possibilities = [0, 1] if is_free_on_y else [user_input["subtotals"]["bySector"][variable["j"]] - sum(map(lambda v: v[variable["j"]], user_input["details"]))]
+
+    if y_possibilities[0] > 1 or x_possibilities[0] > 1:
+      return False
+
+    possibilities = [
+      *([0] if 0 in x_possibilities and 0 in y_possibilities else []), 
+      *([1] if 1 in x_possibilities and 1 in y_possibilities else [])
+    ]
+
+    if len(possibilities) == 0:
+      return False
+    
+    for p in possibilities:
+      user_input["details"][variable["i"]][variable["j"]] += p
+
+      if rec(variables, variable_index - 1, user_input):
+        print("OK details", p)
+        
+        return True
+
+      print("KO details", p)
+      user_input["details"][variable["i"]][variable["j"]] -= p
+    
+    return False
+
+
+def lambda_handler(event, _):
+  user_input = loads(event["body"])
+  validate_input(user_input)
+
+  parsed_input = parse_input(user_input)
+  reduced_input = get_reduced_matrix(*parsed_input)
+  solution = get_solution(*reduced_input)
+  
+  adjust_output(solution, user_input)
+  
   return user_input
 
 user_input = {
