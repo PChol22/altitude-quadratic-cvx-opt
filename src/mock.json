@@ -1,0 +1,14 @@
+{
+  "total": 70,
+  "details": [
+      [null, null, 20, null, null],
+      [null, null, null, null, null],
+      [10, null, null, null, null],
+      [null, null, null, null, null],
+      [null, null, null, null, null]
+  ],
+  "subtotals": {
+    "byCountry": [null, null, null, 15, null],
+    "bySector": [null, null, null, null, null]
+  }
+}
